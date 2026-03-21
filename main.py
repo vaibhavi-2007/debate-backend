@@ -1,20 +1,23 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 import requests
-import language_tool_python
+import os
 
 app = FastAPI()
 
-# ✅ Grammar Tool
-tool = language_tool_python.LanguageTool('en-US')
+# =========================
+# 🔐 HUGGING FACE CONFIG
+# =========================
+HF_API_KEY = os.getenv("HF_API_KEY")
+HF_URL = "https://api-inference.huggingface.co/models/google/flan-t5-large"
 
-# ✅ GROQ CONFIG
-GROQ_API_KEY = "YOUR_GROQ_API_KEY"
-GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
-
+headers = {
+    "Authorization": f"Bearer {HF_API_KEY}",
+    "Content-Type": "application/json"
+}
 
 # =========================
-# MODELS
+# 📦 MODELS
 # =========================
 
 class DebateInput(BaseModel):
@@ -33,94 +36,92 @@ class DebateAnalysisInput(BaseModel):
 
 
 # =========================
-# 🔥 DEBATE RESPONSE (UPGRADED)
+# 🔥 DEBATE RESPONSE
 # =========================
 
 @app.post("/debate")
 def debate(data: DebateInput):
 
     prompt = f"""
-You are an expert-level debate opponent with strong critical thinking.
+Act as a competitive debate opponent.
 
-Debate Topic: {data.topic}
-User Position: {data.side}
+Topic: {data.topic}
+User supports: {data.side}
 
-User Argument:
-"{data.user_text}"
+User argument:
+{data.user_text}
 
-Your job:
-- Take the exact OPPOSITE stance
-- Identify weaknesses in user's argument
-- Give 2-3 strong logical counterpoints
-- Use confident, natural human tone
-- Keep it SHORT (max 4 lines)
-- DO NOT repeat user argument
-- DO NOT agree
-- End with ONE sharp challenging question
-
-Make your response sound like a real competitive debater.
+Your response rules:
+- Take the opposite stance
+- Give 2–3 strong logical counterpoints
+- Keep response short (3–4 lines)
+- Be natural and confident
+- Attack weak points in argument
+- End with ONE challenging question
 """
 
     try:
         response = requests.post(
-            GROQ_URL,
-            headers={
-                "Authorization": f"Bearer {GROQ_API_KEY}",
-                "Content-Type": "application/json"
-            },
-            json={
-                "model": "llama3-70b-8192",
-                "messages": [
-                    {"role": "user", "content": prompt}
-                ]
-            }
+            HF_URL,
+            headers=headers,
+            json={"inputs": prompt}
         )
 
-        reply = response.json()["choices"][0]["message"]["content"]
+        result = response.json()
 
-        return {"reply": reply}
+        if isinstance(result, list):
+            reply = result[0].get("generated_text", "")
+        else:
+            reply = "⚠️ AI not responding properly"
 
     except Exception as e:
-        return {"error": str(e)}
+        reply = f"⚠️ Error: {str(e)}"
+
+    return {"reply": reply}
 
 
 # =========================
-# 🧠 NORMAL SPEECH ANALYSIS
+# 🧠 SPEECH ANALYSIS
 # =========================
 
 @app.post("/analyze")
 def analyze(data: AnalysisInput):
 
-    matches = tool.check(data.speech)
-    error_count = len(matches)
+    prompt = f"""
+Analyze this speech:
 
-    score = 10
-    if error_count > 5:
-        score -= 3
-    elif error_count > 2:
-        score -= 2
+{data.speech}
 
-    corrections = []
-    for m in matches[:5]:
-        corrections.append({
-            "error": m.message,
-            "suggestions": m.replacements[:2]
-        })
+Give:
+- Score out of 10
+- 3 mistakes
+- 3 improvements
 
-    return {
-        "grammar_errors": error_count,
-        "score": score,
-        "corrections": corrections,
-        "tips": [
-            "Fix grammar mistakes",
-            "Use clearer sentence structure",
-            "Add more explanation"
-        ]
-    }
+Keep it short and clear.
+"""
+
+    try:
+        response = requests.post(
+            HF_URL,
+            headers=headers,
+            json={"inputs": prompt}
+        )
+
+        result = response.json()
+
+        if isinstance(result, list):
+            analysis = result[0].get("generated_text", "")
+        else:
+            analysis = "⚠️ Analysis failed"
+
+    except Exception as e:
+        analysis = f"⚠️ Error: {str(e)}"
+
+    return {"analysis": analysis}
 
 
 # =========================
-# 🏁 FINAL DEBATE ANALYSIS (PRO LEVEL)
+# 🏁 DEBATE ANALYSIS
 # =========================
 
 @app.post("/debate-analysis")
@@ -128,25 +129,14 @@ def debate_analysis(data: DebateAnalysisInput):
 
     full_text = " ".join(data.conversation)
 
-    # ✅ Grammar Check
-    matches = tool.check(full_text)
-    error_count = len(matches)
-
-    grammar_score = 10
-    if error_count > 8:
-        grammar_score -= 4
-    elif error_count > 4:
-        grammar_score -= 2
-
-    # ✅ AI FEEDBACK (VERY IMPORTANT PROMPT)
     prompt = f"""
 You are a professional debate coach.
 
-Analyze the user's debate performance based on this conversation:
+Analyze this debate conversation:
 
 {full_text}
 
-Give output STRICTLY in this format:
+Give output EXACTLY like this:
 
 Overall Score: X/10
 Argument Strength: X/10
@@ -155,42 +145,34 @@ Vocabulary: X/10
 Persuasiveness: X/10
 
 Mistakes:
-- (3 clear mistakes)
+- point 1
+- point 2
+- point 3
 
 Improvements:
-- (3 practical improvements)
+- point 1
+- point 2
+- point 3
 
 Better Sentence:
-Rewrite one user sentence in a more powerful and professional way.
-
-Rules:
-- Be clear and structured
-- Be helpful, not harsh
-- Keep it easy to understand
+Rewrite one user sentence clearly.
 """
 
     try:
         response = requests.post(
-            GROQ_URL,
-            headers={
-                "Authorization": f"Bearer {GROQ_API_KEY}",
-                "Content-Type": "application/json"
-            },
-            json={
-                "model": "llama3-70b-8192",
-                "messages": [
-                    {"role": "user", "content": prompt}
-                ]
-            }
+            HF_URL,
+            headers=headers,
+            json={"inputs": prompt}
         )
 
-        ai_feedback = response.json()["choices"][0]["message"]["content"]
+        result = response.json()
 
-        return {
-            "grammar_errors": error_count,
-            "grammar_score": grammar_score,
-            "ai_feedback": ai_feedback
-        }
+        if isinstance(result, list):
+            feedback = result[0].get("generated_text", "")
+        else:
+            feedback = "⚠️ Feedback failed"
 
     except Exception as e:
-        return {"error": str(e)}
+        feedback = f"⚠️ Error: {str(e)}"
+
+    return {"ai_feedback": feedback}
