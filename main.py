@@ -37,12 +37,12 @@ def ask_ai(prompt):
                 "HTTP-Referer": "https://debate-backend-9azm.onrender.com",
                 "X-Title": "Debate App"
             },
-            json={
-                "model": "mistralai/mistral-7b-instruct",
-                "messages": [
-                    {"role": "user", "content": prompt}
-                ]
-            },
+           json={
+    "model": "openchat/openchat-7b",
+    "messages": [
+        {"role": "user", "content": prompt}
+    ]
+},
             timeout=30
         )
 
