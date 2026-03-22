@@ -1,20 +1,20 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 import requests
+import os
 
 app = FastAPI()
 
-# ✅ DIRECT API KEY (for now)
-API_KEY = "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"
+# =========================
+# 🔐 OPENROUTER CONFIG
+# =========================
+API_KEY = os.getenv("OPENROUTER_API_KEY")
 
 URL = "https://openrouter.ai/api/v1/chat/completions"
 
-headers = {
-    "Authorization": f"Bearer {API_KEY}",
-    "HTTP-Referer": "https://your-app.com",
-    "X-Title": "Debate App",
-    "Content-Type": "application/json"
-}
+# =========================
+# 📦 MODELS
+# =========================
 
 class DebateInput(BaseModel):
     topic: str
@@ -24,18 +24,31 @@ class DebateInput(BaseModel):
 class DebateAnalysisInput(BaseModel):
     conversation: list
 
+# =========================
+# 🔥 COMMON AI FUNCTION
+# =========================
+
 def ask_ai(prompt):
     try:
         response = requests.post(
             URL,
-            headers=headers,
+            headers={
+                "Authorization": f"Bearer {API_KEY}",
+                "HTTP-Referer": "https://debate-backend-9azm.onrender.com",
+                "X-Title": "Debate App"
+            },
             json={
                 "model": "mistralai/mistral-7b-instruct",
                 "messages": [
                     {"role": "user", "content": prompt}
                 ]
-            }
+            },
+            timeout=30
         )
+
+        # 🔥 IMPORTANT CHECK
+        if response.status_code != 200:
+            return f"⚠️ API Error: {response.text}"
 
         data = response.json()
         print("API RESPONSE:", data)
@@ -43,22 +56,56 @@ def ask_ai(prompt):
         if "choices" in data:
             return data["choices"][0]["message"]["content"]
 
-        return str(data)
+        return f"⚠️ Unexpected response: {data}"
 
     except Exception as e:
-        return f"⚠️ Error: {str(e)}"
+        return f"⚠️ Exception: {str(e)}"
+
+# =========================
+# 🔥 DEBATE API
+# =========================
 
 @app.post("/debate")
 def debate(data: DebateInput):
 
     prompt = f"""
-Act as a debate opponent.
+Act as a strong debate opponent.
 
 Topic: {data.topic}
 User side: {data.side}
-User argument: {data.user_text}
 
-Give 2 strong counterpoints and end with a question.
+User argument:
+{data.user_text}
+
+- Take opposite side
+- Give 2 strong counterpoints
+- Keep it short
+- End with a sharp question
 """
 
     return {"reply": ask_ai(prompt)}
+
+
+# =========================
+# 🏁 DEBATE ANALYSIS
+# =========================
+
+@app.post("/debate-analysis")
+def debate_analysis(data: DebateAnalysisInput):
+
+    full_text = " ".join(data.conversation)
+
+    prompt = f"""
+You are a debate coach.
+
+Conversation:
+{full_text}
+
+Give:
+- Overall Score
+- Argument Strength
+- 3 mistakes
+- 3 improvements
+"""
+
+    return {"ai_feedback": ask_ai(prompt)}
