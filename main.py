@@ -38,7 +38,7 @@ def ask_ai(prompt):
                 "X-Title": "Debate App"
             },
            json={
-    "model": "openchat/openchat-7b",
+    "model": "meta-llama/llama-3-8b-instruct",
     "messages": [
         {"role": "user", "content": prompt}
     ]
