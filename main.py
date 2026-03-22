@@ -6,14 +6,14 @@ import os
 app = FastAPI()
 
 # =========================
-# 🔐 HUGGING FACE CONFIG
+# 🔐 OPENROUTER CONFIG
 # =========================
-HF_API_KEY = os.getenv("HF_API_KEY")
+API_KEY = os.getenv("OPENROUTER_API_KEY")
 
-HF_URL = "https://router.huggingface.co/hf-inference/models/google/flan-t5-base"
+URL = "https://openrouter.ai/api/v1/chat/completions"
 
 headers = {
-    "Authorization": f"Bearer {HF_API_KEY}",
+    "Authorization": f"Bearer {API_KEY}",
     "Content-Type": "application/json"
 }
 
@@ -26,54 +26,41 @@ class DebateInput(BaseModel):
     side: str
     user_text: str
 
-
 class AnalysisInput(BaseModel):
     topic: str
     speech: str
-
 
 class DebateAnalysisInput(BaseModel):
     conversation: list
 
 
 # =========================
-# 🔥 SAFE HF CALL FUNCTION
+# 🔥 COMMON AI FUNCTION
 # =========================
 
-def query_hf(prompt):
+def ask_ai(prompt):
     try:
         response = requests.post(
-            HF_URL,
+            URL,
             headers=headers,
             json={
-                "inputs": prompt,
-                "options": {"wait_for_model": True}
+                "model": "mistralai/mistral-7b-instruct",
+                "messages": [
+                    {"role": "user", "content": prompt}
+                ]
             },
             timeout=30
         )
 
-        # 🔥 IMPORTANT FIX
-        if response.status_code != 200:
-            return f"⚠️ HF Status Error: {response.text}"
+        data = response.json()
 
-        try:
-            result = response.json()
-        except:
-            return f"⚠️ Non-JSON response: {response.text}"
+        if "choices" in data:
+            return data["choices"][0]["message"]["content"]
 
-        print("HF RESPONSE:", result)
-
-        if isinstance(result, list) and len(result) > 0:
-            return result[0].get("generated_text", "⚠️ Empty response")
-
-        elif isinstance(result, dict) and "error" in result:
-            return f"⚠️ HF Error: {result['error']}"
-
-        else:
-            return "⚠️ Unexpected HF response"
+        return str(data)
 
     except Exception as e:
-        return f"⚠️ Exception: {str(e)}"
+        return f"⚠️ Error: {str(e)}"
 
 
 # =========================
@@ -92,14 +79,13 @@ User side: {data.side}
 User argument:
 {data.user_text}
 
-Rules:
 - Oppose the user
-- Give 2 strong counterpoints
-- Keep it short
+- Give 2 strong points
+- Keep short
 - End with a question
 """
 
-    return {"reply": query_hf(prompt)}
+    return {"reply": ask_ai(prompt)}
 
 
 # =========================
@@ -120,7 +106,7 @@ Give:
 - 3 improvements
 """
 
-    return {"analysis": query_hf(prompt)}
+    return {"analysis": ask_ai(prompt)}
 
 
 # =========================
@@ -145,4 +131,4 @@ Give:
 - 3 improvements
 """
 
-    return {"ai_feedback": query_hf(prompt)}
+    return {"ai_feedback": ask_ai(prompt)}
