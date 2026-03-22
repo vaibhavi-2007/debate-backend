@@ -6,11 +6,11 @@ import os
 app = FastAPI()
 
 # =========================
-# 🔐 HUGGING FACE CONFIG
+# 🔐 HUGGING FACE CONFIG (UPDATED)
 # =========================
 HF_API_KEY = os.getenv("HF_API_KEY")
 
-HF_URL = "https://api-inference.huggingface.co/models/google/flan-t5-base"
+HF_URL = "https://router.huggingface.co/hf-inference/models/google/flan-t5-base"
 
 headers = {
     "Authorization": f"Bearer {HF_API_KEY}"
@@ -39,7 +39,7 @@ class DebateAnalysisInput(BaseModel):
 # 🔥 COMMON FUNCTION
 # =========================
 
-def query_huggingface(prompt):
+def query_hf(prompt):
     try:
         response = requests.post(
             HF_URL,
@@ -51,11 +51,10 @@ def query_huggingface(prompt):
         )
 
         result = response.json()
-
         print("HF RESPONSE:", result)
 
         if isinstance(result, list):
-            return result[0].get("generated_text", "⚠️ Empty AI response")
+            return result[0].get("generated_text", "⚠️ Empty response")
 
         elif "error" in result:
             return f"⚠️ HF Error: {result['error']}"
@@ -68,7 +67,7 @@ def query_huggingface(prompt):
 
 
 # =========================
-# 🔥 DEBATE RESPONSE
+# 🔥 DEBATE
 # =========================
 
 @app.post("/debate")
@@ -83,16 +82,13 @@ User side: {data.side}
 User argument:
 {data.user_text}
 
-Rules:
-- Oppose the user
-- Give 2 strong counterpoints
-- Keep it short
+- Oppose user
+- Give 2 strong points
+- Keep short
 - End with a question
 """
 
-    reply = query_huggingface(prompt)
-
-    return {"reply": reply}
+    return {"reply": query_hf(prompt)}
 
 
 # =========================
@@ -108,14 +104,12 @@ Analyze this speech:
 {data.speech}
 
 Give:
-- Score out of 10
+- Score /10
 - 3 mistakes
 - 3 improvements
 """
 
-    result = query_huggingface(prompt)
-
-    return {"analysis": result}
+    return {"analysis": query_hf(prompt)}
 
 
 # =========================
@@ -140,6 +134,4 @@ Give:
 - 3 improvements
 """
 
-    feedback = query_huggingface(prompt)
-
-    return {"ai_feedback": feedback}
+    return {"ai_feedback": query_hf(prompt)}
