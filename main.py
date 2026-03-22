@@ -8,7 +8,7 @@ app = FastAPI()
 # =========================
 # 🔐 OPENROUTER CONFIG
 # =========================
-API_KEY = os.getenv("OPENROUTER_API_KEY")
+API_KEY = os.getenv("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")
 
 URL = "https://openrouter.ai/api/v1/chat/completions"
 
