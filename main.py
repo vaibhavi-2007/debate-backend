@@ -9,11 +9,11 @@ app = FastAPI()
 # 🔐 HUGGING FACE CONFIG
 # =========================
 HF_API_KEY = os.getenv("HF_API_KEY")
-HF_URL = "https://api-inference.huggingface.co/models/google/flan-t5-large"
+
+HF_URL = "https://api-inference.huggingface.co/models/google/flan-t5-base"
 
 headers = {
-    "Authorization": f"Bearer {HF_API_KEY}",
-    "Content-Type": "application/json"
+    "Authorization": f"Bearer {HF_API_KEY}"
 }
 
 # =========================
@@ -36,6 +36,38 @@ class DebateAnalysisInput(BaseModel):
 
 
 # =========================
+# 🔥 COMMON FUNCTION
+# =========================
+
+def query_huggingface(prompt):
+    try:
+        response = requests.post(
+            HF_URL,
+            headers=headers,
+            json={
+                "inputs": prompt,
+                "options": {"wait_for_model": True}
+            }
+        )
+
+        result = response.json()
+
+        print("HF RESPONSE:", result)
+
+        if isinstance(result, list):
+            return result[0].get("generated_text", "⚠️ Empty AI response")
+
+        elif "error" in result:
+            return f"⚠️ HF Error: {result['error']}"
+
+        else:
+            return "⚠️ Unexpected response"
+
+    except Exception as e:
+        return f"⚠️ Exception: {str(e)}"
+
+
+# =========================
 # 🔥 DEBATE RESPONSE
 # =========================
 
@@ -43,45 +75,28 @@ class DebateAnalysisInput(BaseModel):
 def debate(data: DebateInput):
 
     prompt = f"""
-Act as a competitive debate opponent.
+Act as a strong debate opponent.
 
 Topic: {data.topic}
-User supports: {data.side}
+User side: {data.side}
 
 User argument:
 {data.user_text}
 
-Your response rules:
-- Take the opposite stance
-- Give 2–3 strong logical counterpoints
-- Keep response short (3–4 lines)
-- Be natural and confident
-- Attack weak points in argument
-- End with ONE challenging question
+Rules:
+- Oppose the user
+- Give 2 strong counterpoints
+- Keep it short
+- End with a question
 """
 
-    try:
-        response = requests.post(
-            HF_URL,
-            headers=headers,
-            json={"inputs": prompt}
-        )
-
-        result = response.json()
-
-        if isinstance(result, list):
-            reply = result[0].get("generated_text", "")
-        else:
-            reply = "⚠️ AI not responding properly"
-
-    except Exception as e:
-        reply = f"⚠️ Error: {str(e)}"
+    reply = query_huggingface(prompt)
 
     return {"reply": reply}
 
 
 # =========================
-# 🧠 SPEECH ANALYSIS
+# 🧠 ANALYSIS
 # =========================
 
 @app.post("/analyze")
@@ -96,28 +111,11 @@ Give:
 - Score out of 10
 - 3 mistakes
 - 3 improvements
-
-Keep it short and clear.
 """
 
-    try:
-        response = requests.post(
-            HF_URL,
-            headers=headers,
-            json={"inputs": prompt}
-        )
+    result = query_huggingface(prompt)
 
-        result = response.json()
-
-        if isinstance(result, list):
-            analysis = result[0].get("generated_text", "")
-        else:
-            analysis = "⚠️ Analysis failed"
-
-    except Exception as e:
-        analysis = f"⚠️ Error: {str(e)}"
-
-    return {"analysis": analysis}
+    return {"analysis": result}
 
 
 # =========================
@@ -130,49 +128,18 @@ def debate_analysis(data: DebateAnalysisInput):
     full_text = " ".join(data.conversation)
 
     prompt = f"""
-You are a professional debate coach.
+You are a debate coach.
 
-Analyze this debate conversation:
-
+Conversation:
 {full_text}
 
-Give output EXACTLY like this:
-
-Overall Score: X/10
-Argument Strength: X/10
-Relevance: X/10
-Vocabulary: X/10
-Persuasiveness: X/10
-
-Mistakes:
-- point 1
-- point 2
-- point 3
-
-Improvements:
-- point 1
-- point 2
-- point 3
-
-Better Sentence:
-Rewrite one user sentence clearly.
+Give:
+- Overall Score
+- Argument Strength
+- 3 mistakes
+- 3 improvements
 """
 
-    try:
-        response = requests.post(
-            HF_URL,
-            headers=headers,
-            json={"inputs": prompt}
-        )
-
-        result = response.json()
-
-        if isinstance(result, list):
-            feedback = result[0].get("generated_text", "")
-        else:
-            feedback = "⚠️ Feedback failed"
-
-    except Exception as e:
-        feedback = f"⚠️ Error: {str(e)}"
+    feedback = query_huggingface(prompt)
 
     return {"ai_feedback": feedback}
