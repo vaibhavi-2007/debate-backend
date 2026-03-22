@@ -6,14 +6,15 @@ import os
 app = FastAPI()
 
 # =========================
-# 🔐 HUGGING FACE CONFIG (UPDATED)
+# 🔐 HUGGING FACE CONFIG
 # =========================
 HF_API_KEY = os.getenv("HF_API_KEY")
 
 HF_URL = "https://router.huggingface.co/hf-inference/models/google/flan-t5-base"
 
 headers = {
-    "Authorization": f"Bearer {HF_API_KEY}"
+    "Authorization": f"Bearer {HF_API_KEY}",
+    "Content-Type": "application/json"
 }
 
 # =========================
@@ -36,7 +37,7 @@ class DebateAnalysisInput(BaseModel):
 
 
 # =========================
-# 🔥 COMMON FUNCTION
+# 🔥 SAFE HF CALL FUNCTION
 # =========================
 
 def query_hf(prompt):
@@ -47,20 +48,29 @@ def query_hf(prompt):
             json={
                 "inputs": prompt,
                 "options": {"wait_for_model": True}
-            }
+            },
+            timeout=30
         )
 
-        result = response.json()
+        # 🔥 IMPORTANT FIX
+        if response.status_code != 200:
+            return f"⚠️ HF Status Error: {response.text}"
+
+        try:
+            result = response.json()
+        except:
+            return f"⚠️ Non-JSON response: {response.text}"
+
         print("HF RESPONSE:", result)
 
-        if isinstance(result, list):
+        if isinstance(result, list) and len(result) > 0:
             return result[0].get("generated_text", "⚠️ Empty response")
 
-        elif "error" in result:
+        elif isinstance(result, dict) and "error" in result:
             return f"⚠️ HF Error: {result['error']}"
 
         else:
-            return "⚠️ Unexpected response"
+            return "⚠️ Unexpected HF response"
 
     except Exception as e:
         return f"⚠️ Exception: {str(e)}"
@@ -82,9 +92,10 @@ User side: {data.side}
 User argument:
 {data.user_text}
 
-- Oppose user
-- Give 2 strong points
-- Keep short
+Rules:
+- Oppose the user
+- Give 2 strong counterpoints
+- Keep it short
 - End with a question
 """
 
@@ -104,7 +115,7 @@ Analyze this speech:
 {data.speech}
 
 Give:
-- Score /10
+- Score out of 10
 - 3 mistakes
 - 3 improvements
 """
