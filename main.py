@@ -79,9 +79,10 @@ User argument:
 
 - Take opposite side
 - Give 2 strong counterpoints
-- STRICTLY limit to 3-4 lines
+- STRICTLY limit to 2-3 lines
 - Do NOT explain too much
 - End with a sharp question
+- must be short and simple
 """
 
     return {"reply": ask_ai(prompt)}
@@ -107,6 +108,8 @@ Give:
 - Argument Strength
 - 3 mistakes
 - 3 improvements
+- do not explain too much 
+- should be short and simple but detailed
 """
 
     return {"ai_feedback": ask_ai(prompt)}
