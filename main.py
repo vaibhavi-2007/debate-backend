@@ -79,7 +79,8 @@ User argument:
 
 - Take opposite side
 - Give 2 strong counterpoints
-- Keep it short
+- STRICTLY limit to 3-4 lines
+- Do NOT explain too much
 - End with a sharp question
 """
 
