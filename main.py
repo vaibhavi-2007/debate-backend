@@ -42,72 +42,69 @@ def ask_ai(prompt):
                 "messages": [
                     {
                         "role": "system",
-                        "content": "You are a strict professional debate AI. Always follow instructions exactly. Keep answers short, relevant, and logical."
+                        "content": "You are a strict debate AI. Follow instructions exactly. Never ignore format."
                     },
                     {
                         "role": "user",
                         "content": prompt
                     }
                 ],
-                "max_tokens": 120,
-                "temperature": 0.7
+                "max_tokens": 100,
+                "temperature": 0.5
             },
             timeout=30
         )
 
-        if response.status_code != 200:
-            return f"⚠️ API Error: {response.text}"
-
         data = response.json()
-        print("API RESPONSE:", data)
 
         if "choices" in data:
             return data["choices"][0]["message"]["content"].strip()
 
-        return f"⚠️ Unexpected response: {data}"
+        return "⚠️ AI error"
 
     except Exception as e:
-        return f"⚠️ Exception: {str(e)}"
+        return f"⚠️ {str(e)}"
 
 
 # =========================
-# 🔥 DEBATE API
+# 🔥 DEBATE API (FIXED)
 # =========================
 
 @app.post("/debate")
 def debate(data: DebateInput):
 
     prompt = f"""
-You are an expert competitive debater.
-
 Topic: {data.topic}
-User's position: {data.side}
+User side: {data.side}
 
-User's argument:
+User argument:
 {data.user_text}
 
-STRICT RULES (FOLLOW ALL):
-1. You MUST take the OPPOSITE side
-2. Understand the user's argument deeply
-3. Stay strictly on topic
-4. Give EXACTLY 2 strong logical counterpoints
-5. Keep response VERY SHORT (2–3 lines only)
-6. Use simple, natural language
-7. DO NOT repeat user's words
-8. DO NOT give long explanations
-9. END with ONE sharp question
+TASK:
+- Take the opposite side
+- Give ONLY 2 short points
 
-OUTPUT FORMAT:
-- Counterpoint 1
-- Counterpoint 2
-- Final question (same line or next line)
+RULES:
+- Point 1: Directly attack user's argument
+- Point 2: Show benefit of your side
+- Use very simple sentences
+- Each point must be ONE line only
+- Total output max 2–3 lines
+- Do NOT repeat user words
+- Do NOT give explanation
+- End with ONE short question
+
+EXAMPLE OUTPUT:
+Your argument ignores real cost.
+My side improves efficiency and saves money.
+Why overlook long-term benefits?
 """
 
     return {"reply": ask_ai(prompt)}
 
 
 # =========================
-# 🏁 DEBATE ANALYSIS API
+# 🏁 DEBATE ANALYSIS API (FIXED)
 # =========================
 
 @app.post("/debate-analysis")
@@ -116,21 +113,26 @@ def debate_analysis(data: DebateAnalysisInput):
     full_text = " ".join(data.conversation)
 
     prompt = f"""
-You are a professional debate evaluator.
+Analyze this debate strictly:
 
-Conversation:
 {full_text}
 
-STRICT RULES:
-- Analyze ONLY:
-  • Grammar
-  • Relevance to topic
-  • Argument clarity
-  • Logical structure
-- DO NOT analyze emotions or tone
-- Keep response SHORT and PROFESSIONAL
+FOCUS:
+1. Grammar mistakes (VERY IMPORTANT)
+2. Relevance to topic
+3. Clarity
+4. Logical structure
 
-OUTPUT FORMAT (STRICT):
+GRAMMAR RULE:
+- Count grammar mistakes properly
+- If no mistakes → give high score (7–10)
+- If many mistakes → low score
+- DO NOT return 0 unless extremely bad
+
+OUTPUT FORMAT:
+
+Grammar Errors: number
+Grammar Score: X/10
 
 Overall Score: X/10
 Relevance: X/10
@@ -138,14 +140,14 @@ Clarity: X/10
 Structure: X/10
 
 Mistakes:
-- point 1
-- point 2
-- point 3
+- grammar mistake example
+- unclear sentence
+- weak logic
 
 Improvements:
-- point 1
-- point 2
-- point 3
+- fix grammar
+- improve clarity
+- strengthen argument
 """
 
     return {"ai_feedback": ask_ai(prompt)}
