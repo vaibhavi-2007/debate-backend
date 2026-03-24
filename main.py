@@ -6,7 +6,7 @@ import os
 app = FastAPI()
 
 # =========================
-# 🔐 OPENROUTER CONFIG
+# 🔐 CONFIG
 # =========================
 API_KEY = os.getenv("OPENROUTER_API_KEY")
 URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -34,7 +34,7 @@ class RapidFireInput(BaseModel):
     forbidden_words: list
 
 # =========================
-# 🔥 COMMON AI FUNCTION
+# 🔥 COMMON AI FUNCTION (SAFE)
 # =========================
 
 def ask_ai(prompt):
@@ -65,15 +65,19 @@ def ask_ai(prompt):
             timeout=30
         )
 
+        # ✅ HANDLE API FAILURE
+        if response.status_code != 200:
+            return f"⚠️ API Error: {response.text}"
+
         data = response.json()
 
         if "choices" in data:
             return data["choices"][0]["message"]["content"].strip()
 
-        return "⚠️ AI error"
+        return "⚠️ Invalid AI response"
 
     except Exception as e:
-        return f"⚠️ {str(e)}"
+        return f"⚠️ Exception: {str(e)}"
 
 # =========================
 # 🔥 DEBATE API
@@ -99,6 +103,9 @@ RULES:
 - Line 3: Ask one short question
 - Use simple sentences
 - Do NOT explain
+
+WARNING:
+Follow format EXACTLY.
 
 OUTPUT:
 Your argument is weak.
@@ -148,10 +155,14 @@ Improvements:
 - fix grammar
 - improve clarity
 - strengthen argument
+
+WARNING:
+If format is not followed EXACTLY, response is invalid.
 """
 
     result = ask_ai(prompt)
 
+    # ✅ FALLBACK
     if "Overall Score" not in result:
         result = """Grammar Errors: 0
 Grammar Score: 6/10
@@ -179,7 +190,11 @@ Improvements:
 @app.post("/story-analysis")
 def story_analysis(data: StoryInput):
 
-    words = ", ".join(data.words)
+    # ✅ HANDLE BOTH STRING & LIST
+    if isinstance(data.words, list):
+        words = ", ".join(data.words)
+    else:
+        words = str(data.words)
 
     prompt = f"""
 Story:
@@ -218,6 +233,9 @@ Improvements:
 - improve grammar
 - use all words
 - add creativity
+
+WARNING:
+Follow format EXACTLY.
 """
 
     return {"ai_feedback": ask_ai(prompt)}
@@ -226,7 +244,7 @@ Improvements:
 # ⚡ RAPID FIRE ANALYSIS
 # =========================
 
-@app.post("/rapidfire-analysis")
+@app.post("/rapid-fire-analysis")  # ✅ FIXED URL
 def rapidfire_analysis(data: RapidFireInput):
 
     constraints = ", ".join(data.constraint_words)
@@ -276,12 +294,15 @@ Improvements:
 - fix grammar
 - use required words
 - avoid forbidden words
+
+WARNING:
+Follow format EXACTLY.
 """
 
     return {"ai_feedback": ask_ai(prompt)}
 
 # =========================
-# ✅ ROOT (HEALTH CHECK)
+# ✅ ROOT
 # =========================
 
 @app.get("/")
