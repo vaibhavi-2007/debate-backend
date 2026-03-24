@@ -23,6 +23,16 @@ class DebateInput(BaseModel):
 class DebateAnalysisInput(BaseModel):
     conversation: list
 
+class StoryInput(BaseModel):
+    words: list
+    story: str
+
+class RapidFireInput(BaseModel):
+    topic: str
+    speech: str
+    constraint_words: list
+    forbidden_words: list
+
 # =========================
 # 🔥 COMMON AI FUNCTION
 # =========================
@@ -42,14 +52,14 @@ def ask_ai(prompt):
                 "messages": [
                     {
                         "role": "system",
-                        "content": "You are a strict debate AI. Follow instructions EXACTLY. Never skip format."
+                        "content": "You are a strict AI evaluator. Follow format EXACTLY. Never skip fields."
                     },
                     {
                         "role": "user",
                         "content": prompt
                     }
                 ],
-                "max_tokens": 120,
+                "max_tokens": 150,
                 "temperature": 0.4
             },
             timeout=30
@@ -64,7 +74,6 @@ def ask_ai(prompt):
 
     except Exception as e:
         return f"⚠️ {str(e)}"
-
 
 # =========================
 # 🔥 DEBATE API
@@ -88,22 +97,19 @@ RULES:
 - Line 1: Attack user's argument
 - Line 2: Show benefit of your side
 - Line 3: Ask one short question
-- Use very simple sentences
-- Each line must be short
-- Do NOT repeat user words
+- Use simple sentences
 - Do NOT explain
 
-OUTPUT EXAMPLE:
-Your argument ignores real cost.
-My side saves time and money.
-Why ignore long-term benefits?
+OUTPUT:
+Your argument is weak.
+My side gives better results.
+Why ignore this advantage?
 """
 
     return {"reply": ask_ai(prompt)}
 
-
 # =========================
-# 🏁 DEBATE ANALYSIS API (FINAL FIX)
+# 🏁 DEBATE ANALYSIS
 # =========================
 
 @app.post("/debate-analysis")
@@ -112,31 +118,18 @@ def debate_analysis(data: DebateAnalysisInput):
     full_text = " ".join(data.conversation)
 
     prompt = f"""
-Analyze the debate below carefully:
+Analyze the debate:
 
 {full_text}
 
-IMPORTANT:
-- You MUST follow output format EXACTLY
-- DO NOT skip any field
-- DO NOT change format
-- DO NOT add extra text
+STRICT RULES:
+- Follow format EXACTLY
+- Do NOT skip anything
 
 EVALUATE:
-1. Grammar (VERY IMPORTANT)
-2. Relevance to topic
-3. Clarity
-4. Logical structure
+Grammar, Relevance, Clarity, Structure
 
-GRAMMAR RULE:
-- Identify real grammar mistakes
-- Count them correctly
-- If grammar is good → score 7–10
-- If grammar is average → score 4–6
-- If grammar is poor → score 0–3
-- NEVER give 0 unless extremely bad
-
-RETURN EXACTLY IN THIS FORMAT:
+OUTPUT:
 
 Grammar Errors: <number>
 Grammar Score: <score>/10
@@ -147,22 +140,18 @@ Clarity: <score>/10
 Structure: <score>/10
 
 Mistakes:
-- <specific grammar mistake>
-- <unclear sentence or wording>
-- <logical issue>
+- grammar issue
+- unclear sentence
+- weak logic
 
 Improvements:
-- <fix grammar>
-- <improve clarity>
-- <strengthen argument>
-
-WARNING:
-If format is not followed exactly, the answer is invalid.
+- fix grammar
+- improve clarity
+- strengthen argument
 """
 
     result = ask_ai(prompt)
 
-    # ✅ Safety fallback (ensures format always exists)
     if "Overall Score" not in result:
         result = """Grammar Errors: 0
 Grammar Score: 6/10
@@ -173,12 +162,128 @@ Clarity: 6/10
 Structure: 6/10
 
 Mistakes:
-- Unable to analyze properly
+- Analysis failed
 
 Improvements:
 - Try again
-- Improve sentence clarity
-- Use proper grammar
+- Improve clarity
+- Use correct grammar
 """
 
     return {"ai_feedback": result}
+
+# =========================
+# 📖 STORY ANALYSIS
+# =========================
+
+@app.post("/story-analysis")
+def story_analysis(data: StoryInput):
+
+    words = ", ".join(data.words)
+
+    prompt = f"""
+Story:
+{data.story}
+
+Given words:
+{words}
+
+CHECK:
+- Grammar
+- Structure
+- Creativity
+- Clarity
+- Word usage (important)
+
+RULES:
+- Missing words → reduce score
+- Creative story → high score
+
+OUTPUT:
+
+Grammar Score: X/10
+Structure: X/10
+Creativity: X/10
+Clarity: X/10
+Word Usage: X/10
+
+Overall Score: X/10
+
+Mistakes:
+- grammar issue
+- missing words
+- weak story
+
+Improvements:
+- improve grammar
+- use all words
+- add creativity
+"""
+
+    return {"ai_feedback": ask_ai(prompt)}
+
+# =========================
+# ⚡ RAPID FIRE ANALYSIS
+# =========================
+
+@app.post("/rapidfire-analysis")
+def rapidfire_analysis(data: RapidFireInput):
+
+    constraints = ", ".join(data.constraint_words)
+    forbidden = ", ".join(data.forbidden_words)
+
+    prompt = f"""
+Topic: {data.topic}
+
+Speech:
+{data.speech}
+
+Must use words:
+{constraints}
+
+Forbidden words:
+{forbidden}
+
+CHECK:
+- Grammar
+- Relevance
+- Clarity
+- Structure
+- Constraint usage
+- Forbidden usage
+
+RULES:
+- Missing constraint word → reduce score
+- Using forbidden word → heavy penalty
+
+OUTPUT:
+
+Grammar Score: X/10
+Relevance: X/10
+Clarity: X/10
+Structure: X/10
+Constraint Usage: X/10
+Forbidden Usage: X/10
+
+Overall Score: X/10
+
+Mistakes:
+- grammar issue
+- missing constraint word
+- forbidden word used
+
+Improvements:
+- fix grammar
+- use required words
+- avoid forbidden words
+"""
+
+    return {"ai_feedback": ask_ai(prompt)}
+
+# =========================
+# ✅ ROOT (HEALTH CHECK)
+# =========================
+
+@app.get("/")
+def home():
+    return {"status": "Backend running successfully"}
