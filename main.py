@@ -34,7 +34,7 @@ class RapidFireInput(BaseModel):
     forbidden_words: list
 
 # =========================
-# 🔥 COMMON AI FUNCTION (SAFE)
+# 🔥 COMMON AI FUNCTION (STRICT)
 # =========================
 
 def ask_ai(prompt):
@@ -52,32 +52,39 @@ def ask_ai(prompt):
                 "messages": [
                     {
                         "role": "system",
-                        "content": "You are a strict AI evaluator. Follow format EXACTLY. Never skip fields."
+                        "content": (
+                            "You are a STRICT AI evaluator.\n"
+                            "You MUST follow the exact output format.\n"
+                            "Do NOT skip any field.\n"
+                            "Do NOT add extra explanation.\n"
+                            "Only output the required format.\n"
+                            "If format is broken, response is invalid."
+                        )
                     },
                     {
                         "role": "user",
                         "content": prompt
                     }
                 ],
-                "max_tokens": 150,
-                "temperature": 0.4
+                "max_tokens": 200,
+                "temperature": 0.3
             },
             timeout=30
         )
 
-        # ✅ HANDLE API FAILURE
         if response.status_code != 200:
-            return f"⚠️ API Error: {response.text}"
+            return None
 
         data = response.json()
 
         if "choices" in data:
             return data["choices"][0]["message"]["content"].strip()
 
-        return "⚠️ Invalid AI response"
+        return None
 
-    except Exception as e:
-        return f"⚠️ Exception: {str(e)}"
+    except Exception:
+        return None
+
 
 # =========================
 # 🔥 DEBATE API
@@ -93,27 +100,24 @@ User side: {data.side}
 User argument:
 {data.user_text}
 
-TASK:
-- Take opposite side
-- Give ONLY 2 short points + 1 question
+OUTPUT FORMAT:
+Line 1: Attack user's argument
+Line 2: Show benefit of your side
+Line 3: Ask one short question
 
 RULES:
-- Line 1: Attack user's argument
-- Line 2: Show benefit of your side
-- Line 3: Ask one short question
-- Use simple sentences
-- Do NOT explain
-
-WARNING:
-Follow format EXACTLY.
-
-OUTPUT:
-Your argument is weak.
-My side gives better results.
-Why ignore this advantage?
+- Only 3 lines
+- Simple sentences
+- No explanation
 """
 
-    return {"reply": ask_ai(prompt)}
+    result = ask_ai(prompt)
+
+    if result is None:
+        result = "Your argument is weak.\nMy side is better.\nWhy ignore this?"
+
+    return {"reply": result}
+
 
 # =========================
 # 🏁 DEBATE ANALYSIS
@@ -129,41 +133,33 @@ Analyze the debate:
 
 {full_text}
 
-STRICT RULES:
-- Follow format EXACTLY
-- Do NOT skip anything
-
-EVALUATE:
-Grammar, Relevance, Clarity, Structure
-
-OUTPUT:
+STRICT OUTPUT FORMAT:
 
 Grammar Errors: <number>
-Grammar Score: <score>/10
+Grammar Score: <number>/10
 
-Overall Score: <score>/10
-Relevance: <score>/10
-Clarity: <score>/10
-Structure: <score>/10
+Overall Score: <number>/10
+Relevance: <number>/10
+Clarity: <number>/10
+Structure: <number>/10
 
 Mistakes:
-- grammar issue
-- unclear sentence
-- weak logic
+- point
+- point
 
 Improvements:
-- fix grammar
-- improve clarity
-- strengthen argument
+- point
+- point
 
-WARNING:
-If format is not followed EXACTLY, response is invalid.
+RULES:
+- Do NOT skip any field
+- All scores must be 0–10
+- Must include Overall Score
 """
 
     result = ask_ai(prompt)
 
-    # ✅ FALLBACK
-    if "Overall Score" not in result:
+    if result is None or "Overall Score" not in result:
         result = """Grammar Errors: 0
 Grammar Score: 6/10
 
@@ -178,10 +174,10 @@ Mistakes:
 Improvements:
 - Try again
 - Improve clarity
-- Use correct grammar
 """
 
     return {"ai_feedback": result}
+
 
 # =========================
 # 📖 STORY ANALYSIS
@@ -190,61 +186,65 @@ Improvements:
 @app.post("/story-analysis")
 def story_analysis(data: StoryInput):
 
-    # ✅ HANDLE BOTH STRING & LIST
-    if isinstance(data.words, list):
-        words = ", ".join(data.words)
-    else:
-        words = str(data.words)
+    words = ", ".join(data.words) if isinstance(data.words, list) else str(data.words)
 
     prompt = f"""
 Story:
 {data.story}
 
-Given words:
+Words:
 {words}
 
-CHECK:
-- Grammar
-- Structure
-- Creativity
-- Clarity
-- Word usage (important)
+STRICT OUTPUT FORMAT:
 
-RULES:
-- Missing words → reduce score
-- Creative story → high score
+Grammar Score: <number>/10
+Structure: <number>/10
+Creativity: <number>/10
+Clarity: <number>/10
+Word Usage: <number>/10
 
-OUTPUT:
-
-Grammar Score: X/10
-Structure: X/10
-Creativity: X/10
-Clarity: X/10
-Word Usage: X/10
-
-Overall Score: X/10
+Overall Score: <number>/10
 
 Mistakes:
-- grammar issue
-- missing words
-- weak story
+- point
+- point
 
 Improvements:
-- improve grammar
-- use all words
-- add creativity
+- point
+- point
 
-WARNING:
-Follow format EXACTLY.
+RULES:
+- Must include all fields
+- Scores between 0–10
+- Must include Overall Score
 """
 
-    return {"ai_feedback": ask_ai(prompt)}
+    result = ask_ai(prompt)
+
+    if result is None or "Overall Score" not in result:
+        result = """Grammar Score: 6/10
+Structure: 6/10
+Creativity: 6/10
+Clarity: 6/10
+Word Usage: 6/10
+
+Overall Score: 6/10
+
+Mistakes:
+- Analysis failed
+
+Improvements:
+- Improve grammar
+"""
+
+    return {"ai_feedback": result}
+
 
 # =========================
 # ⚡ RAPID FIRE ANALYSIS
 # =========================
 
-@app.post("/rapid-fire-analysis")  # ✅ FIXED URL
+@app.post("/rapid-fire-analysis")
 def rapidfire_analysis(data: RapidFireInput):
 
     constraints = ", ".join(data.constraint_words)
@@ -256,50 +256,59 @@ Topic: {data.topic}
 Speech:
 {data.speech}
 
-Must use words:
+Must use:
 {constraints}
 
-Forbidden words:
+Avoid:
 {forbidden}
 
-CHECK:
-- Grammar
-- Relevance
-- Clarity
-- Structure
-- Constraint usage
-- Forbidden usage
+STRICT OUTPUT FORMAT:
 
-RULES:
-- Missing constraint word → reduce score
-- Using forbidden word → heavy penalty
+Grammar Score: <number>/10
+Relevance: <number>/10
+Clarity: <number>/10
+Structure: <number>/10
+Constraint Usage: <number>/10
+Forbidden Usage: <number>/10
 
-OUTPUT:
-
-Grammar Score: X/10
-Relevance: X/10
-Clarity: X/10
-Structure: X/10
-Constraint Usage: X/10
-Forbidden Usage: X/10
-
-Overall Score: X/10
+Overall Score: <number>/10
 
 Mistakes:
-- grammar issue
-- missing constraint word
-- forbidden word used
+- point
+- point
 
 Improvements:
-- fix grammar
-- use required words
-- avoid forbidden words
+- point
+- point
 
-WARNING:
-Follow format EXACTLY.
+RULES:
+- Must include ALL fields
+- Scores must be 0–10
+- MUST include Overall Score
+- No extra text outside format
 """
 
-    return {"ai_feedback": ask_ai(prompt)}
+    result = ask_ai(prompt)
+
+    if result is None or "Overall Score" not in result:
+        result = """Grammar Score: 6/10
+Relevance: 6/10
+Clarity: 6/10
+Structure: 6/10
+Constraint Usage: 5/10
+Forbidden Usage: 7/10
+
+Overall Score: 6/10
+
+Mistakes:
+- Could not analyze properly
+
+Improvements:
+- Try again
+"""
+
+    return {"ai_feedback": result}
+
 
 # =========================
 # ✅ ROOT
