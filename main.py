@@ -7,7 +7,7 @@ import random
 app = FastAPI()
 
 # =========================
-# 🔐 CONFIG (MULTI API KEYS)
+# 🔐 MULTI API KEYS
 # =========================
 API_KEYS = [
     os.getenv("OPENROUTER_API_KEY_1"),
@@ -29,7 +29,7 @@ class DebateInput(BaseModel):
     user_text: str
 
 class DebateAnalysisInput(BaseModel):
-    user_text: str
+    conversation: list   # ✅ keep old (NO 422 error)
 
 class StoryInput(BaseModel):
     words: list
@@ -42,12 +42,12 @@ class RapidFireInput(BaseModel):
     forbidden_words: list
 
 # =========================
-# 🔥 COMMON AI FUNCTION (ROBUST)
+# 🔥 COMMON AI FUNCTION
 # =========================
 
 def ask_ai(prompt):
 
-    random.shuffle(API_KEYS)  # 🔁 rotate keys
+    random.shuffle(API_KEYS)  # rotate keys
 
     for key in API_KEYS:
 
@@ -64,28 +64,28 @@ def ask_ai(prompt):
                     "Content-Type": "application/json"
                 },
                 json={
-                    "model": "mistralai/mistral-7b-instruct:free",
+                    # ✅ STRONG MODEL (BACK)
+                    "model": "meta-llama/llama-3-8b-instruct",
+
                     "messages": [
                         {
                             "role": "system",
                             "content": (
-                                "You are a PROFESSIONAL human evaluator.\n"
-                                "You must behave like a strict English teacher.\n\n"
+                                "You are a STRICT professional evaluator.\n"
+                                "You must behave like a real human English teacher.\n\n"
                                 "CRITICAL RULES:\n"
-                                "- Output MUST follow format EXACTLY\n"
-                                "- DO NOT skip any field\n"
-                                "- DO NOT add extra explanation\n"
-                                "- DO NOT generate fake mistakes\n"
-                                "- All feedback must come ONLY from given text\n"
-                                "- If no mistake → write 'None'\n"
-                                "- If no improvement → write 'Good job'\n\n"
-                                "SCORING RULES:\n"
-                                "- Scores must be realistic (not random)\n"
-                                "- Bad grammar → reduce score\n"
-                                "- Irrelevant content → reduce relevance\n"
-                                "- Poor structure → reduce structure score\n"
-                                "- Good answer → give high score (8–10)\n\n"
-                                "Output must ALWAYS be complete and valid."
+                                "- Follow output format EXACTLY\n"
+                                "- Do NOT skip any field\n"
+                                "- Do NOT add extra explanation\n"
+                                "- Do NOT generate fake mistakes\n"
+                                "- All feedback MUST be from user's text\n"
+                                "- If no mistakes → write 'None'\n"
+                                "- If no improvements → write 'Good job'\n\n"
+                                "SCORING:\n"
+                                "- Scores must reflect real quality\n"
+                                "- Weak answer → low score\n"
+                                "- Strong answer → high score\n"
+                                "- Never give random scores\n"
                             )
                         },
                         {
@@ -93,8 +93,8 @@ def ask_ai(prompt):
                             "content": prompt
                         }
                     ],
-                    "max_tokens": 180,
-                    "temperature": 0.2
+                    "max_tokens": 220,
+                    "temperature": 0.3
                 },
                 timeout=30
             )
@@ -126,15 +126,15 @@ User argument:
 TASK:
 Take opposite side.
 
-OUTPUT (STRICT 3 LINES ONLY):
-Line 1: Attack user's argument logically
-Line 2: Give strong benefit of your side
-Line 3: Ask one challenging question
+OUTPUT FORMAT:
+Line 1: Critically attack user's argument
+Line 2: Show strong advantage of your side
+Line 3: Ask one logical question
 
 RULES:
 - EXACTLY 3 lines
-- Simple sentences
 - No explanation
+- Use simple sentences
 """
 
     result = ask_ai(prompt)
@@ -152,11 +152,13 @@ RULES:
 @app.post("/debate-analysis")
 def debate_analysis(data: DebateAnalysisInput):
 
+    full_text = " ".join(data.conversation)
+
     prompt = f"""
-Analyze ONLY the user's argument below.
+Analyze ONLY the user's argument.
 
 TEXT:
-{data.user_text}
+{full_text}
 
 STRICT OUTPUT FORMAT:
 
@@ -169,16 +171,15 @@ Clarity: <number>/10
 Structure: <number>/10
 
 Mistakes:
-- real mistake from text OR None
+- real mistake OR None
 
 Improvements:
 - based on mistake OR Good job
 
-STRICT RULES:
-- DO NOT analyze anything except given text
-- DO NOT generate fake mistakes
+RULES:
+- Do NOT analyze anything outside text
+- Do NOT generate fake mistakes
 - MUST include Overall Score
-- Scores must reflect actual quality
 """
 
     result = ask_ai(prompt)
@@ -252,7 +253,7 @@ Word Usage: 6/10
 Overall Score: 6/10
 
 Mistakes:
-- Minor issues
+- Minor issue
 
 Improvements:
 - Improve clarity
@@ -279,10 +280,10 @@ Topic: {data.topic}
 Speech:
 {data.speech}
 
-Must Use Words:
+Must use:
 {constraints}
 
-Forbidden Words:
+Forbidden:
 {forbidden}
 
 STRICT OUTPUT FORMAT:
@@ -303,10 +304,10 @@ Improvements:
 - based on mistake OR Good job
 
 RULES:
-- Check constraint words properly
+- Check constraints strictly
 - Check forbidden words strictly
-- If speech is perfect → no fake mistakes
-- NEVER say "could not analyze"
+- No fake mistakes
+- Never say "could not analyze"
 """
 
     result = ask_ai(prompt)
