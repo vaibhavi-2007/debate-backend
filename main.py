@@ -21,7 +21,7 @@ class DebateInput(BaseModel):
     user_text: str
 
 class DebateAnalysisInput(BaseModel):
-    conversation: list
+    user_text: str
 
 class StoryInput(BaseModel):
     words: list
@@ -34,7 +34,7 @@ class RapidFireInput(BaseModel):
     forbidden_words: list
 
 # =========================
-# 🔥 COMMON AI FUNCTION (STRICT)
+# 🔥 COMMON AI FUNCTION
 # =========================
 
 def ask_ai(prompt):
@@ -44,7 +44,7 @@ def ask_ai(prompt):
             headers={
                 "Authorization": f"Bearer {API_KEY}",
                 "HTTP-Referer": "https://debate-backend-9azm.onrender.com",
-                "X-Title": "Debate App",
+                "X-Title": "Speech Arena",
                 "Content-Type": "application/json"
             },
             json={
@@ -53,12 +53,18 @@ def ask_ai(prompt):
                     {
                         "role": "system",
                         "content": (
-                            "You are a STRICT AI evaluator.\n"
-                            "You MUST follow the exact output format.\n"
-                            "Do NOT skip any field.\n"
-                            "Do NOT add extra explanation.\n"
-                            "Only output the required format.\n"
-                            "If format is broken, response is invalid."
+                            "You are a STRICT professional evaluator.\n"
+                            "You MUST follow output format EXACTLY.\n"
+                            "You are NOT allowed to:\n"
+                            "- Skip any field\n"
+                            "- Add extra explanation\n"
+                            "- Change format\n"
+                            "- Give fake feedback\n\n"
+                            "All scores must be REAL and based on input.\n"
+                            "All mistakes must be from actual text.\n"
+                            "If no mistakes → write 'None'.\n"
+                            "If no improvements → write 'Good job'.\n\n"
+                            "Output must be COMPLETE and VALID always."
                         )
                     },
                     {
@@ -66,8 +72,8 @@ def ask_ai(prompt):
                         "content": prompt
                     }
                 ],
-                "max_tokens": 200,
-                "temperature": 0.3
+                "max_tokens": 300,
+                "temperature": 0.2
             },
             timeout=30
         )
@@ -103,18 +109,18 @@ User argument:
 OUTPUT FORMAT:
 Line 1: Attack user's argument
 Line 2: Show benefit of your side
-Line 3: Ask one short question
+Line 3: Ask one question
 
 RULES:
-- Only 3 lines
-- Simple sentences
+- EXACTLY 3 lines
 - No explanation
+- Simple sentences
 """
 
     result = ask_ai(prompt)
 
     if result is None:
-        result = "Your argument is weak.\nMy side is better.\nWhy ignore this?"
+        result = "Your argument is weak.\nMy side is stronger.\nWhy ignore this?"
 
     return {"reply": result}
 
@@ -126,12 +132,11 @@ RULES:
 @app.post("/debate-analysis")
 def debate_analysis(data: DebateAnalysisInput):
 
-    full_text = " ".join(data.conversation)
-
     prompt = f"""
-Analyze the debate:
+Analyze ONLY the user's argument.
 
-{full_text}
+TEXT:
+{data.user_text}
 
 STRICT OUTPUT FORMAT:
 
@@ -144,37 +149,26 @@ Clarity: <number>/10
 Structure: <number>/10
 
 Mistakes:
-- point
-- point
+- real mistake from text
+- real mistake from text
 
 Improvements:
-- point
-- point
+- based on mistake
+- based on mistake
 
-RULES:
-- Do NOT skip any field
-- All scores must be 0–10
-- Must include Overall Score
+STRICT RULES:
+- MUST include ALL fields
+- MUST include Overall Score
+- Scores must be between 0–10
+- DO NOT invent mistakes
+- DO NOT skip anything
+- DO NOT output invalid format
 """
 
     result = ask_ai(prompt)
 
     if result is None or "Overall Score" not in result:
-        result = """Grammar Errors: 0
-Grammar Score: 6/10
-
-Overall Score: 6/10
-Relevance: 6/10
-Clarity: 6/10
-Structure: 6/10
-
-Mistakes:
-- Analysis failed
-
-Improvements:
-- Try again
-- Improve clarity
-"""
+        return {"ai_feedback": "ERROR: AI failed. Please retry."}
 
     return {"ai_feedback": result}
 
@@ -186,13 +180,13 @@ Improvements:
 @app.post("/story-analysis")
 def story_analysis(data: StoryInput):
 
-    words = ", ".join(data.words) if isinstance(data.words, list) else str(data.words)
+    words = ", ".join(data.words)
 
     prompt = f"""
 Story:
 {data.story}
 
-Words:
+Required Words:
 {words}
 
 STRICT OUTPUT FORMAT:
@@ -206,36 +200,25 @@ Word Usage: <number>/10
 Overall Score: <number>/10
 
 Mistakes:
-- point
-- point
+- real mistake
+- real mistake
 
 Improvements:
-- point
-- point
+- based on mistake
+- based on mistake
 
-RULES:
-- Must include all fields
-- Scores between 0–10
-- Must include Overall Score
+STRICT RULES:
+- Must use real analysis
+- No fake mistakes
+- If perfect → Mistakes: None
+- If perfect → Improvements: Good job
+- MUST include Overall Score
 """
 
     result = ask_ai(prompt)
 
     if result is None or "Overall Score" not in result:
-        result = """Grammar Score: 6/10
-Structure: 6/10
-Creativity: 6/10
-Clarity: 6/10
-Word Usage: 6/10
-
-Overall Score: 6/10
-
-Mistakes:
-- Analysis failed
-
-Improvements:
-- Improve grammar
-"""
+        return {"ai_feedback": "ERROR: AI failed. Please retry."}
 
     return {"ai_feedback": result}
 
@@ -251,15 +234,17 @@ def rapidfire_analysis(data: RapidFireInput):
     forbidden = ", ".join(data.forbidden_words)
 
     prompt = f"""
+Analyze this speech STRICTLY.
+
 Topic: {data.topic}
 
 Speech:
 {data.speech}
 
-Must use:
+Must Use Words:
 {constraints}
 
-Avoid:
+Forbidden Words:
 {forbidden}
 
 STRICT OUTPUT FORMAT:
@@ -274,38 +259,26 @@ Forbidden Usage: <number>/10
 Overall Score: <number>/10
 
 Mistakes:
-- point
-- point
+- real mistake OR None
 
 Improvements:
-- point
-- point
+- real improvement OR Good job
 
-RULES:
-- Must include ALL fields
-- Scores must be 0–10
+STRICT RULES:
+- MUST include ALL fields
 - MUST include Overall Score
-- No extra text outside format
+- DO NOT say "could not analyze"
+- DO NOT say "try again"
+- DO NOT generate fake mistakes
+- Scores must reflect actual speech
+- If perfect → Mistakes: None
+- If perfect → Improvements: Good job
 """
 
     result = ask_ai(prompt)
 
     if result is None or "Overall Score" not in result:
-        result = """Grammar Score: 6/10
-Relevance: 6/10
-Clarity: 6/10
-Structure: 6/10
-Constraint Usage: 5/10
-Forbidden Usage: 7/10
-
-Overall Score: 6/10
-
-Mistakes:
-- Could not analyze properly
-
-Improvements:
-- Try again
-"""
+        return {"ai_feedback": "ERROR: AI failed. Please retry."}
 
     return {"ai_feedback": result}
 
